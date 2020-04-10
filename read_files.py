@@ -23,8 +23,14 @@ with open(os.path.join(CONTENT_DIR, 'metadata.csv')) as csvfile:
         for id_el in id_list:
             meta_data_dict[id_el] = row
 
+words_from_call = []
+with open("smallwordsfromcall.txt") as f:
+    for line in f:
+        words_from_call.append(line.strip())
+
 def read_files():
     nr_of_sections = 0
+    found_words_dict = {}
 
     texts_list = []
     for dir in ["biorxiv_medrxiv, comm_use_subset", "custom_license", "noncomm_use_subset"]:
@@ -54,10 +60,23 @@ def read_files():
                                 section_dict[current_section] = section_dict[current_section] + 1
                             else:
                                 section_dict[current_section] = 1
-                            order_in_paper = order_in_paper + 1
-                            list_to_append = [el["text"], current_section, paper_id, order_in_paper, dir]
-                            list_to_append.extend(meta_data[1:])
-                            texts_list.append(list_to_append)
+                                
+                            add_text = False
+                            found_words = []
+                            for word in words_from_call:
+                                if word in el["text"].lower():
+                                    add_text = True
+                                    found_words.append(word)
+                                    if word in found_words_dict:
+                                        found_words_dict[word] = found_words_dict[word] + 1
+                                    else:
+                                        found_words_dict[word] = 1
+                            if add_text:
+                                order_in_paper = order_in_paper + 1
+                                list_to_append = [el["text"], current_section, paper_id, order_in_paper, dir]
+                                list_to_append.extend(meta_data[1:])
+                                list_to_append.append("/".join(found_words))
+                                texts_list.append(list_to_append)
                             #print(list_to_append)
                         #print("----")
                     #print("\n")
@@ -74,5 +93,8 @@ def read_files():
     with open('expanded_meta_data.txt', 'w') as f:
         for el in texts_list:
             f.write("\t".join([str(i) for i in el]) + "\n")
+            
+    for key, item in found_words_dict.items():
+        print(str(key) + "\t" + str(item))
     
 read_files()
