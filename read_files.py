@@ -1,16 +1,27 @@
 import os
 import glob
 import json
+import csv
 
-CONTENT_DIR = "CORD-19-research-challenge"
+CONTENT_DIR = "../CORD-19-research-challenge"
 section_dict = {}
 
 headings_to_exclude_set = set()
 with open("headings_to_exclude.txt") as f:
     for line in f:
         headings_to_exclude_set.add(line.strip())
-print(headings_to_exclude_set)
 
+meta_data_dict = {}
+with open(os.path.join(CONTENT_DIR, 'metadata.csv')) as csvfile:
+    reader = csv.reader(csvfile, delimiter=',')
+    for row in reader:
+        id = row[0].strip()
+        if ";" in id:
+            id_list = [x.strip() for x in id.split(";")]
+        else:
+            id_list = [id]
+        for id_el in id_list:
+            meta_data_dict[id_el] = row
 
 def read_files():
     nr_of_sections = 0
@@ -23,7 +34,16 @@ def read_files():
             order_in_paper = 0
             with open(file) as f:
                 data = json.load(f)
-                paper_id = data["paper_id"]
+                paper_id = data["paper_id"].strip()
+                meta_data = []
+                if paper_id in meta_data_dict:
+                    meta_data = meta_data_dict[paper_id]
+                else:
+                    print(paper_id + " not in metadata")
+                    print(nr_of_sections)
+                    print()
+                    pass
+                    
                 current_section = None
                 for el in data["body_text"]:
                     if el["section"] != current_section:
@@ -35,20 +55,24 @@ def read_files():
                             else:
                                 section_dict[current_section] = 1
                             order_in_paper = order_in_paper + 1
-                            tuple_to_append = (el["text"], current_section, paper_id, order_in_paper)
-                            texts_list.append(tuple_to_append)
-                            print(tuple_to_append)
+                            list_to_append = [el["text"], current_section, paper_id, order_in_paper, dir]
+                            list_to_append.extend(meta_data[1:])
+                            texts_list.append(list_to_append)
+                            #print(list_to_append)
                         #print("----")
                     #print("\n")
                     #print(el["text"])
                     nr_of_sections = nr_of_sections + 1
-                    if nr_of_sections % 1000 == 0:
+                    if nr_of_sections % 10000 == 0:
                         print(nr_of_sections)
                                     
 
     with open('headings.txt', 'w') as f:
         for (nr, k) in sorted([(nr, key) for (key, nr) in section_dict.items()], reverse=True):
             f.write(k + "\t" +  str(nr) + "\n")
-    print(len(texts_list))
+            
+    with open('expanded_meta_data.txt', 'w') as f:
+        for el in texts_list:
+            f.write("\t".join([str(i) for i in el]) + "\n")
     
 read_files()
