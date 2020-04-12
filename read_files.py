@@ -24,9 +24,14 @@ with open(os.path.join(CONTENT_DIR, 'metadata.csv')) as csvfile:
             meta_data_dict[id_el] = row
 
 words_from_call = []
-with open("smallwordsfromcall.txt") as f:
+with open("smallerwordsfromcall.txt") as f:
     for line in f:
         words_from_call.append(line.strip())
+
+words_leading_to_exclude = []
+with open("wordsleadingtoexclude.txt") as f:
+    for line in f:
+        words_leading_to_exclude.append(line.strip())
 
 def read_files():
     nr_of_sections = 0
@@ -62,21 +67,42 @@ def read_files():
                                 section_dict[current_section] = 1
                                 
                             add_text = False
+                            found_exclusion_word = False
                             found_words = []
-                            for word in words_from_call:
-                                if word in el["text"].lower():
-                                    add_text = True
-                                    found_words.append(word)
-                                    if word in found_words_dict:
-                                        found_words_dict[word] = found_words_dict[word] + 1
-                                    else:
-                                        found_words_dict[word] = 1
+                            lower_text = el["text"].lower()
+                            
+                            for word in words_leading_to_exclude:
+                                if word + " " in lower_text \
+                                    or " " + word in lower_text \
+                                    or word + "." in lower_text \
+                                    or word + "," in lower_text:
+                                    found_exclusion_word = True
+                            
+                            if not found_exclusion_word:
+                                for word in words_from_call:
+                                    if word + " " in lower_text \
+                                        or " " + word in lower_text \
+                                        or word + "." in lower_text \
+                                        or word + "," in lower_text:
+                                        add_text = True
+                                        found_words.append(word)
+                                        if word in found_words_dict:
+                                            found_words_dict[word] = found_words_dict[word] + 1
+                                        else:
+                                            found_words_dict[word] = 1
+
                             if add_text:
-                                order_in_paper = order_in_paper + 1
-                                list_to_append = [el["text"], current_section, paper_id, order_in_paper, dir]
-                                list_to_append.extend(meta_data[1:])
-                                list_to_append.append("/".join(found_words))
-                                texts_list.append(list_to_append)
+                                text = el["text"]
+                                if meta_data[5].strip() != "": # Only include texts that are indexed in pubmed
+                                    url = ' <a href="' + 'https://www.ncbi.nlm.nih.gov/pubmed/?term=' \
+                                        + meta_data[5] \
+                                        + '" target="_blank" rel="noreferrer noopener">Pubmed</a> '
+                                    text = text + url
+                                    order_in_paper = order_in_paper + 1
+                                    list_to_append = [text, current_section, paper_id, order_in_paper, dir]
+                                    list_to_append.extend(meta_data[1:])
+                                    list_to_append.append("/".join(found_words))
+                                    texts_list.append(list_to_append)
                             #print(list_to_append)
                         #print("----")
                     #print("\n")
@@ -89,10 +115,23 @@ def read_files():
     with open('headings.txt', 'w') as f:
         for (nr, k) in sorted([(nr, key) for (key, nr) in section_dict.items()], reverse=True):
             f.write(k + "\t" +  str(nr) + "\n")
-            
+    
+    OUTPUT_DIR = "risk_factors"
+    if not os.path.exists(OUTPUT_DIR):
+        os.mkdir(OUTPUT_DIR)
+    nr_of_texts = 0
+    current_sub_dir = 0
     with open('expanded_meta_data.txt', 'w') as f:
         for el in texts_list:
+            if nr_of_texts % 300 == 0:
+                current_sub_dir = current_sub_dir + 1
+                if not os.path.exists(os.path.join(OUTPUT_DIR, str(current_sub_dir))):
+                    os.mkdir(os.path.join(OUTPUT_DIR, str(current_sub_dir)))
+            nr_of_texts = nr_of_texts + 1
             f.write("\t".join([str(i) for i in el]) + "\n")
+            output_file_name = os.path.join(OUTPUT_DIR, str(current_sub_dir), str(el[2]) + "_" + str(el[3]) + ".txt")
+            with open(output_file_name, 'w') as text_file:
+                text_file.write(el[0])
             
     for key, item in found_words_dict.items():
         print(str(key) + "\t" + str(item))
