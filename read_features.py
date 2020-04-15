@@ -5,7 +5,9 @@ import numpy as np
 
 OUTSIDE_LABEL = "O"
 INSIDE_LABEL = "I"
-default_vector = [0] * 200
+WINDOW_SIZE = 5
+VECTOR_LENGTH = 200
+default_vector = np.array([0.0] * VECTOR_LENGTH)
 
 X, y = load_iris(return_X_y=True)
 #print(X)
@@ -14,14 +16,31 @@ X, y = load_iris(return_X_y=True)
 #print(clf.predict(X[:2, :]))
 
 
+def get_vector_for_word(word, word2vec_model):
+    if word in word2vec_model:
+        vector = word2vec_model[word]
+    else:
+        vector = default_vector
+    return vector
 
 def get_vectors(words, word2vec_model):
     return_vectors = []
-    for word in words:
-        #if word in word2vec_model:
-        #    vector = word2vec_model[word]
-        #else:
-        vector = default_vector
+    for i in range(0, len(words)):
+        word = words[i]
+        vector = get_vector_for_word(word, word2vec_model)
+        
+        for j in range(1, WINDOW_SIZE+1):
+            before_index = i - j
+            after_index = i -j
+            before_vector = default_vector
+            after_vector = default_vector
+            if before_index >= 0:
+                before_vector = get_vector_for_word(words[before_index], word2vec_model)
+            if after_index >= len(words):
+                after_vector = get_vector_for_word(words[after_index], word2vec_model)
+            vector = np.concatenate((vector, before_vector))
+            vector = np.concatenate((vector, after_vector))
+        
         return_vectors.append(vector)
     np_return_vectors = np.array([np.array(ti) for ti in return_vectors])
     return np_return_vectors
@@ -47,12 +66,14 @@ def read_data(file_name):
             
             
         
-#word2vec_model = KeyedVectors.load_word2vec_format('/Users/marsk757/wordspaces/pubmed2018_w2v_200D.bin', binary=True)
+word2vec_model = KeyedVectors.load_word2vec_format('/Users/marsk757/wordspaces/pubmed2018_w2v_200D.bin', binary=True)
 #
-#word2vec_model = None
-#print(get_vectors(["diabetes", "mellitus", "seenrnrnrnqlsowk"], word2vec_model))
+res = get_vectors(["diabetes", "mellitus", "seenrnrnrnqlsowk"], word2vec_model)
+for el in res:
+    print(el)
+    print(el.shape)
 
-training_data, training_labels = read_data("manually_annotated_data.txt")
-for a,b in zip(training_data, training_labels):
-    print(a,b)
+#training_data, training_labels = read_data("manually_annotated_data.txt")
+#for a,b in zip(training_data, training_labels):
+#    print(a,b)
 
