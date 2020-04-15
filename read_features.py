@@ -1,6 +1,6 @@
 from gensim.models import KeyedVectors
 from sklearn.datasets import load_iris
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegressionCV
 import numpy as np
 
 OUTSIDE_LABEL = "O"
@@ -9,10 +9,12 @@ WINDOW_SIZE = 5
 VECTOR_LENGTH = 200
 default_vector = np.array([0.0] * VECTOR_LENGTH)
 
-X, y = load_iris(return_X_y=True)
+#X, y = load_iris(return_X_y=True)
 #print(X)
 #print(y)
+#exit(1)
 #clf = LogisticRegression(random_state=0, max_iter=1000).fit(X, y)
+
 #print(clf.predict(X[:2, :]))
 
 
@@ -65,15 +67,31 @@ def read_data(file_name):
         
             
             
-        
-word2vec_model = KeyedVectors.load_word2vec_format('/Users/marsk757/wordspaces/pubmed2018_w2v_200D.bin', binary=True)
+def get_training_labels_vec(training_labels):
+    labels = []
+    for label in training_labels:
+        if label == OUTSIDE_LABEL:
+            labels.append(0)
+        else:
+            labels.append(1)
+    return labels
+
 #
-res = get_vectors(["diabetes", "mellitus", "seenrnrnrnqlsowk"], word2vec_model)
-for el in res:
-    print(el)
-    print(el.shape)
+#res = get_vectors(["diabetes", "mellitus", "seenrnrnrnqlsowk"], word2vec_model)
+#for el in res:
+#    print(el)
+#    print(el.shape)
 
-#training_data, training_labels = read_data("manually_annotated_data.txt")
-#for a,b in zip(training_data, training_labels):
-#    print(a,b)
+training_data, training_labels = read_data("manually_annotated_data.txt")
 
+word2vec_model = KeyedVectors.load_word2vec_format('/Users/marsk757/wordspaces/pubmed2018_w2v_200D.bin', binary=True)
+y = get_training_labels_vec(training_labels)
+X = get_vectors(training_data, word2vec_model)
+clf = LogisticRegressionCV(random_state=0, max_iter=1000, cv=5, class_weight="balanced", n_jobs=4).fit(X, y)
+prediction_prob = clf.predict_proba(X)
+predictions = clf.predict(X)
+
+for x, y, predicted_prob, predicted in zip(training_data, y, prediction_prob, predictions):
+    print(x, y, predicted, predicted_prob)
+
+print(clf.classes_)
