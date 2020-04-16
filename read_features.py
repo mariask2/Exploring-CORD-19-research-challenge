@@ -178,6 +178,12 @@ for dir in ["biorxiv_medrxiv"]:# , comm_use_subset", "custom_license", "noncomm_
                     prediction_prob = clf_loaded.predict_proba(X)
                     predictions = clf_loaded.predict(X)
                     if 1 in predictions:
+                        url = ""
+                        if meta_data[5].strip() != "":
+                            url = ' <a href="' + 'https://www.ncbi.nlm.nih.gov/pubmed/?term=' \
+                            + meta_data[5] \
+                            + '" target="_blank" rel="noreferrer noopener">Pubmed</a> '
+                        title = meta_data[2]
                         for nr, (x,  predicted_prob, predicted) in enumerate(zip(paragraph, prediction_prob, predictions)):
                             if predicted == 1:
                                 left_influencing_window_index = nr - WINDOW_SIZE
@@ -186,15 +192,23 @@ for dir in ["biorxiv_medrxiv"]:# , comm_use_subset", "custom_license", "noncomm_
                                     left_influencing_window_index = 0
                                 if right_influencing_window_index >= len(paragraph):
                                     left_influencing_window_index = len(paragraph) - 1
-                                prediction_scores.append((np.amax(predicted_prob), " ".join(paragraph), " ".join(paragraph[left_influencing_window_index:right_influencing_window_index])))
+                                prediction_scores.append((np.amax(predicted_prob), \
+                                " ".join(paragraph), \
+                                 " ".join(paragraph[left_influencing_window_index:right_influencing_window_index]), \
+                                 url, \
+                                 title))
                                 prediction_scores.sort(reverse=True)
                                 prediction_scores = prediction_scores[:-1]
                             #print(x, predicted, predicted_prob)
                             #print(prediction_scores)
                     file_dict[paper_id] = file_text
 
-  
-for el in prediction_scores:
-    for t in el:
-        print(t)
-    
+with open("top_papers.html", "w") as f:
+    for (score, text, window_text, url, title) in prediction_scores:
+        f.write("<p>" + str(score) + "</p>")
+        f.write("<b>" + title + "</b>")
+        f.write("<p> " + text.replace(window_text, "<i>" + window_text + "</i>") + " </p>")
+        f.write(url)
+        f.write("<br>")
+
+
