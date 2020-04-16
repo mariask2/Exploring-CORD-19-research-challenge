@@ -13,6 +13,7 @@ OUTSIDE_LABEL = "O"
 INSIDE_LABEL = "I"
 WINDOW_SIZE = 5
 VECTOR_LENGTH = 200
+FREQUENCY_CUT_OFF = 2
 default_vector = np.array([0.0] * VECTOR_LENGTH)
 
 
@@ -23,11 +24,17 @@ def get_vector_for_word(word, word2vec_model):
         vector = default_vector
     return vector
 
-def get_vectors(words, word2vec_model):
+def get_vectors(words, word2vec_model, feature_list):
     return_vectors = []
     for i in range(0, len(words)):
         word = words[i]
         vector = get_vector_for_word(word, word2vec_model)
+        
+        one_hot_encoding_vector = len(feature_list)*[0.0]
+        if word in feature_list:
+            index_of_word = feature_list.index(word)
+            one_hot_encoding_vector[index_of_word] = 1.0
+        vector = np.concatenate((vector, one_hot_encoding_vector))
         
         for j in range(1, WINDOW_SIZE+1):
             before_index = i - j
@@ -49,6 +56,7 @@ def get_vectors(words, word2vec_model):
 def read_data(file_name):
     words = []
     classifications = []
+    feature_dict = {}
     with open(file_name) as f:
         for line in f:
             data = OUTSIDE_LABEL
@@ -60,8 +68,15 @@ def read_data(file_name):
                     data = INSIDE_LABEL
             words.append(word)
             classifications.append(data)
+            if data == INSIDE_LABEL:
+                if word in feature_dict:
+                    feature_dict[word] = feature_dict[word] + 1
+                else:
+                    feature_dict[word] = 1
+                
             
-    return words, classifications
+    feature_list = [word for word, freq in feature_dict.items() if freq >= FREQUENCY_CUT_OFF]
+    return words, classifications, feature_list
         
             
             
@@ -75,20 +90,24 @@ def get_training_labels_vec(training_labels):
     return labels
 
 word2vec_model = KeyedVectors.load_word2vec_format('/Users/marsk757/wordspaces/pubmed2018_w2v_200D.bin', binary=True)
+
 model_file_name = 'risk_mention_model.joblib'
+feature_list_file_name = 'risk_mention_features.joblib'
 
-if not os.path.isfile(model_file_name):
+if not os.path.isfile(model_file_name) or not os.path.isfile(feature_list_file_name):
     # If no model has been trained before
-    training_data, training_labels = read_data("manually_annotated_data.txt")
-
+    training_data, training_labels, feature_list = read_data("manually_annotated_data.txt")
+    print(feature_list)
     
     y = get_training_labels_vec(training_labels)
-    X = get_vectors(training_data, word2vec_model)
-    clf = LogisticRegressionCV(random_state=0, max_iter=1000, cv=5, class_weight="balanced", n_jobs=8).fit(X, y)
+    X = get_vectors(training_data, word2vec_model, feature_list)
+    clf = LogisticRegressionCV(random_state=0, max_iter=1000, cv=2, n_jobs=8).fit(X, y)
 
     dump(clf, model_file_name)
+    dump(feature_list, feature_list_file_name)
 
     clf_loaded = load(model_file_name)
+    
 
     prediction_prob = clf_loaded.predict_proba(X)
     predictions = clf_loaded.predict(X)
@@ -98,6 +117,7 @@ if not os.path.isfile(model_file_name):
 
 # Use the model
 clf_loaded = load(model_file_name)
+feature_list_loaded = load(feature_list_file_name)
 
 CONTENT_DIR = "../CORD-19-research-challenge"
 
@@ -154,13 +174,19 @@ for dir in ["biorxiv_medrxiv"]:# , comm_use_subset", "custom_license", "noncomm_
                 or "2019-nCoV" in plain_text_lower:
                 
                 for paragraph in file_text:
-                    X = get_vectors(paragraph, word2vec_model)
+                    X = get_vectors(paragraph, word2vec_model, feature_list_loaded)
                     prediction_prob = clf_loaded.predict_proba(X)
                     predictions = clf_loaded.predict(X)
                     if 1 in predictions:
-                        for x,  predicted_prob, predicted in zip(paragraph, prediction_prob, predictions):
+                        for nr, (x,  predicted_prob, predicted) in enumerate(zip(paragraph, prediction_prob, predictions)):
                             if predicted == 1:
-                                prediction_scores.append((np.amax(predicted_prob), " ".join(paragraph), x))
+                                left_influencing_window_index = nr - WINDOW_SIZE
+                                right_influencing_window_index = nr + WINDOW_SIZE
+                                if left_influencing_window_index < 0:
+                                    left_influencing_window_index = 0
+                                if right_influencing_window_index >= len(paragraph):
+                                    left_influencing_window_index = len(paragraph) - 1
+                                prediction_scores.append((np.amax(predicted_prob), " ".join(paragraph), " ".join(paragraph[left_influencing_window_index:right_influencing_window_index])))
                                 prediction_scores.sort(reverse=True)
                                 prediction_scores = prediction_scores[:-1]
                             #print(x, predicted, predicted_prob)
@@ -168,5 +194,7 @@ for dir in ["biorxiv_medrxiv"]:# , comm_use_subset", "custom_license", "noncomm_
                     file_dict[paper_id] = file_text
 
   
-print(prediction_scores)
+for el in prediction_scores:
+    for t in el:
+        print(t)
     
